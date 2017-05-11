@@ -48,9 +48,9 @@
     // sleep random amunt
   
     // write our id to the serial
-    mySerial.begin(9600);
+    mySerial.begin(38400);
   
-    Serial.begin(9600);
+    Serial.begin(115200);
     
     OWSlave.setReceiveCallback(&owReceive);
     OWSlave.begin(owROM, oneWireData.getPinNumber());
@@ -89,6 +89,7 @@ unsigned long lastread = 0;
 #define READTIMEOUT 3
   
   void loop() {
+    static unsigned int lineindex = 0;
   
     bool gotSomething = false;
     while (mySerial.available() > 0) {
@@ -104,12 +105,13 @@ unsigned long lastread = 0;
          lastread = nowread;
         window[index] = readbyte;
         if(check()) {
-          Serial.print("detect");
+          Serial.print(lineindex++);
+          Serial.print(" detect");
           Serial.println(window[0]);  
           poletimes[window[0]] = nowread + TIMEOUT;
           
           copyState();
-        }
+        } 
         index += 1;
         index %= (sizeof(window) / sizeof(window[0]));
       }
@@ -117,7 +119,7 @@ unsigned long lastread = 0;
 
     if (gotSomething) {
       return;
-    }
+    } 
     unsigned long now = millis();
 
  // TODO should we check for touch anyway?!
