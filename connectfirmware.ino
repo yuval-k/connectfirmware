@@ -6,6 +6,7 @@
   
   #define MY_INDEX   1
 
+  #define LED_INDEX 13
   
   #define NUM_POLES 20
   #define TIMEOUT  500
@@ -37,6 +38,7 @@
   SoftwareSerialWithHalfDuplex mySerial(10, 11, false, false);
   
   void setup() {
+    pinMode(LED_INDEX, OUTPUT);
     // put your setup code here, to run once:
     // try to read 4 bytes from the serial.
     // if all 4 bytes are the same, mark it is being connect
@@ -116,6 +118,8 @@ unsigned long lastread = 0;
         index %= (sizeof(window) / sizeof(window[0]));
       }
     }
+
+    digitalWrite(LED_INDEX, gotSomething);
 
     if (gotSomething) {
       return;
