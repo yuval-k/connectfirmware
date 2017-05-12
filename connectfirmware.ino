@@ -151,6 +151,7 @@ unsigned long lastread = 0;
         
         copyState();
       }
+      pinMode(CAP_TX,INPUT);
     }
 
  // TODO should we check for touch anyway?!
