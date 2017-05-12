@@ -88,7 +88,7 @@
 
 unsigned long txdeadline = 0;
 unsigned long lastread = 0;
-#define READTIMEOUT 3
+#define READTIMEOUT 30
   
   void loop() {
     static unsigned int lineindex = 0;
