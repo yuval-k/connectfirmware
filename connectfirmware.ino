@@ -140,6 +140,14 @@ unsigned long lastread = 0;
     if (gotSomething) {
       return;
     } 
+
+    
+    if (touchdetect()) {
+      poletimes[MY_INDEX] = millis() + TIMEOUT;
+      
+      copyState();
+    }
+    
     unsigned long now = millis();
 
  // TODO should we check for touch anyway?!
@@ -152,11 +160,6 @@ unsigned long lastread = 0;
       mySerial.write(myid, sizeof(myid)/sizeof(myid[0]));
     }
   
-    if (touchdetect()) {
-      poletimes[MY_INDEX] = millis() + TIMEOUT;
-      
-      copyState();
-    }
   
   }
   
