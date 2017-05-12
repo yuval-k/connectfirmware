@@ -73,7 +73,7 @@ long CapTouch::readTouch(uint8_t samples)
 	
 	}
 		
-//	*sReg |= sBit;             // set Send pin Output
+	*sReg |= sBit;             // set Send pin Output
 	
 	for (i = 0; i < samples; i++) {
 		noInterrupts();        // turn off interrupts to prevent collisions with other software
