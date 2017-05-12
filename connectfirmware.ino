@@ -1,12 +1,20 @@
   
   #include "LowLevel.h"
   #include "OneWireSlave.h"
+  #include "CapTouch.h"
   
   #include "SoftwareSerialWithHalfDuplex.h"
   
   #define MY_INDEX   1
 
   #define LED_INDEX 13
+  
+  #define CAP_TX 5
+  #define CAP_RX 6
+  #define CAP_SAMPLES 15
+  #define CAP_THRESHOLD 100
+
+ CapTouch capTouch = CapTouch(CAP_TX, CAP_RX); 
   
   #define NUM_POLES 20
   #define TIMEOUT  500
@@ -56,6 +64,9 @@
     
     OWSlave.setReceiveCallback(&owReceive);
     OWSlave.begin(owROM, oneWireData.getPinNumber());
+
+  capTouch.calibrateTouch(CAP_SAMPLES);
+
   }
   
   uint8_t window[4] = {0xff,0xff,0xff,0xff};
@@ -81,8 +92,13 @@
   }
   
   bool touchdetect()  {
-    return false;
-  // TODO
+
+  long res = capTouch.readTouch(CAP_SAMPLES);
+    
+  Serial.print(" vap result      ");
+  Serial.println(res);
+
+   res  > CAP_THRESHOLD;
   }
 
 
