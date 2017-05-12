@@ -21,6 +21,8 @@
   
   #define TX_PERIOD 60 + 40*MY_INDEX
   
+  #define CAP_SENSE_PERIOD 100
+
   enum DeviceState
   {
     DS_WaitingReset,
@@ -95,7 +97,7 @@
 
   long res = capTouch.readTouch(CAP_SAMPLES);
     
-  Serial.print(" vap result      ");
+  Serial.print(" cap result      ");
   Serial.println(res);
 
    res  > CAP_THRESHOLD;
@@ -103,30 +105,31 @@
 
 
 unsigned long txdeadline = 0;
+unsigned long capdeadline = 0;
 unsigned long lastread = 0;
 #define READTIMEOUT 30
   
   void loop() {
     static unsigned int lineindex = 0;
+    unsigned long now = millis();
   
     bool gotSomething = false;
     while (mySerial.available() > 0) {
       byte readbyte = mySerial.read();
       if (readbyte !=0) {
        gotSomething = true;
-       unsigned long nowread = millis();
 
-       if (nowread > (lastread + READTIMEOUT)) {
+       if (now > (lastread + READTIMEOUT)) {
         clear_window();
         index = 0;
        }
-         lastread = nowread;
+         lastread = now;
         window[index] = readbyte;
         if(check()) {
           Serial.print(lineindex++);
           Serial.print(" detect");
           Serial.println(window[0]);  
-          poletimes[window[0]] = nowread + TIMEOUT;
+          poletimes[window[0]] = now + TIMEOUT;
           
           copyState();
         } 
@@ -141,25 +144,25 @@ unsigned long lastread = 0;
       return;
     } 
 
-    
-    if (touchdetect()) {
-      poletimes[MY_INDEX] = millis() + TIMEOUT;
-      
-      copyState();
+    if (now > capdeadline) {
+        capdeadline = now + CAP_SENSE_PERIOD;
+      if (touchdetect()) {
+        poletimes[MY_INDEX] = millis() + TIMEOUT;
+        
+        copyState();
+      }
     }
-    
-    unsigned long now = millis();
 
  // TODO should we check for touch anyway?!
-    if (now < txdeadline) {
-      return;
-    }
-    txdeadline = now + TX_PERIOD;
-    
-    for (int i=0; i<2; i++) {
-      mySerial.write(myid, sizeof(myid)/sizeof(myid[0]));
-    }
+    if (now > txdeadline) {
+      
+      txdeadline = now + TX_PERIOD;
+      
+      for (int i=0; i<2; i++) {
+        mySerial.write(myid, sizeof(myid)/sizeof(myid[0]));
+      }
   
+    }
   
   }
   
