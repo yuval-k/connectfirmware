@@ -1,6 +1,7 @@
+#include <Wire.h>
+
 
 #include "LowLevel.h"
-#include "OneWireSlave.h"
 #include "CapTouch.h"
 
 #include "SoftwareSerialWithHalfDuplex.h"
@@ -91,8 +92,9 @@ void setup()
     
   const byte owROM[7] = ROM;
 
-//  OWSlave.setReceiveCallback(&owReceive);
-//  OWSlave.begin(owROM, oneWireData.getPinNumber());
+  Wire.setClock(100000);
+  Wire.begin(0x10 + MY_INDEX); // join i2c bus
+  Wire.onRequest(onRequest); // register event
 
 }
 
@@ -240,7 +242,7 @@ void copyState()
   bool istouch = false;
   bool isconnect = false;
 
-  for (int i = 0; i < NUM_POLES; i++)
+  for (int i = 0; i < COUNT_OF(poletimes); i++)
   {
     if (poletimes[i] > now)
     {
@@ -259,7 +261,7 @@ void copyState()
   digitalWrite(TOUCH_LED_INDEX, istouch ? HIGH : LOW);
   digitalWrite(CONNECT_LED_INDEX, isconnect ? HIGH : LOW);
 
-  currentstate[COUNT_OF(currentstate)-1] = OWSlave.crc8(currentstate, COUNT_OF(currentstate)-1);
+  currentstate[COUNT_OF(currentstate)-1] = crc8(currentstate, COUNT_OF(currentstate)-1);
 
   cli();
   memcpy((void *)scratchpad, currentstate, COUNT_OF(currentstate));
@@ -267,30 +269,29 @@ void copyState()
   sei();
 }
 
-void owReceive(OneWireSlave::ReceiveEvent evt, byte data)
+
+void onRequest()
 {
-  switch (evt)
-  {
-  case OneWireSlave::RE_Byte:
-    switch (state)
-    {
-    case DS_WaitingCommand:
-      switch (data)
-      {
-      case CONNECT_READ_STATE:
-        state = DS_WaitingReset;
-        OWSlave.beginWrite((const byte *)scratchpad, COUNT_OF(scratchpad), 0);
-        break;
-      }
-      break;
+  const uint8_t* data = scratchpad;
+  size_t datasize = COUNT_OF(scratchpad);
+  Wire.write(data, datasize);
+}
 
-    case OneWireSlave::RE_Reset:
-      state = DS_WaitingCommand;
-      break;
 
-    case OneWireSlave::RE_Error:
-      state = DS_WaitingReset;
-      break;
+
+byte crc8(const byte* data, short numBytes)
+{
+  byte crc = 0;
+
+  while (numBytes--) {
+    byte inbyte = *data++;
+    for (byte i = 8; i; i--) {
+      byte mix = (crc ^ inbyte) & 0x01;
+      crc >>= 1;
+      if (mix) crc ^= 0x8C;
+      inbyte >>= 1;
     }
   }
+  return crc;
 }
+
