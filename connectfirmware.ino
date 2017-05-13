@@ -1,12 +1,13 @@
-#include <Wire.h>
+#include "OneWireHub.h"
+#include "OneWirePole.h"
 
+#include "utils.h"
 
 #include "LowLevel.h"
 #include "CapTouch.h"
 
 #include "SoftwareSerialWithHalfDuplex.h"
 
-#define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 
 #define MY_INDEX 1
 
@@ -32,9 +33,6 @@ CapTouch capTouch = CapTouch(CAP_TX, CAP_RX);
 
 #define CAP_SENSE_PERIOD 200
 
-#define ROM {0x28, MY_INDEX, 0xab, 0x00, 0x00, 0x00, 0x02}
-
-
 
 enum DeviceState
 {
@@ -57,6 +55,12 @@ Pin oneWireData(2);
 
 SoftwareSerialWithHalfDuplex mySerial(10, 11, false, false);
 
+
+
+constexpr uint8_t pin_onewire   { 8 };
+
+auto hub = OneWireHub(pin_onewire);
+auto pole = OneWirePole(MY_INDEX); 
 void setup()
 {
 
@@ -90,12 +94,8 @@ void setup()
   Serial.println("setting send pin back to input");
   pinMode(CAP_TX, INPUT);
     
-  const byte owROM[7] = ROM;
-
-  Wire.setClock(100000);
-  Wire.begin(0x10 + MY_INDEX); // join i2c bus
-  Wire.onRequest(onRequest); // register event
-
+  hub.attach(pole);
+ 
 }
 
 #define SEND_INDEX (MY_INDEX+1)
@@ -182,6 +182,9 @@ void loop()
   static unsigned long silencedeadline = 0;
   static unsigned long stateupdate_deadline = 0;
   
+
+  hub.poll();
+
   bool gotSomething = checkConnect();
 
 
@@ -235,9 +238,8 @@ void loop()
 
 void copyState()
 {
-
   unsigned long now = millis();
-  uint8_t currentstate[COUNT_OF(scratchpad)] = {'\0'};
+  uint8_t currentstate[8] = {'\0'};
 
   bool istouch = false;
   bool isconnect = false;
@@ -246,7 +248,7 @@ void copyState()
   {
     if (poletimes[i] > now)
     {
-      currentstate[i >> 3] |= (1 << (i & 0x7));
+      currentstate[(i >> 3)] |= (1 << (i & 0x7));
 
       if (i==MY_INDEX) {
         istouch = true;
@@ -261,37 +263,6 @@ void copyState()
   digitalWrite(TOUCH_LED_INDEX, istouch ? HIGH : LOW);
   digitalWrite(CONNECT_LED_INDEX, isconnect ? HIGH : LOW);
 
-  currentstate[COUNT_OF(currentstate)-1] = crc8(currentstate, COUNT_OF(currentstate)-1);
+  pole.copy_scrachpad(currentstate, COUNT_OF(currentstate));
 
-  cli();
-  memcpy((void *)scratchpad, currentstate, COUNT_OF(currentstate));
-  state = DS_StateWritten;
-  sei();
 }
-
-
-void onRequest()
-{
-  const uint8_t* data = scratchpad;
-  size_t datasize = COUNT_OF(scratchpad);
-  Wire.write(data, datasize);
-}
-
-
-
-byte crc8(const byte* data, short numBytes)
-{
-  byte crc = 0;
-
-  while (numBytes--) {
-    byte inbyte = *data++;
-    for (byte i = 8; i; i--) {
-      byte mix = (crc ^ inbyte) & 0x01;
-      crc >>= 1;
-      if (mix) crc ^= 0x8C;
-      inbyte >>= 1;
-    }
-  }
-  return crc;
-}
-
