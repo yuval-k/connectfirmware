@@ -9,23 +9,29 @@
 
 #define MY_INDEX 1
 
-#define LED_INDEX 13
+#define TOUCH_LED_INDEX 13
+#define CONNECT_LED_INDEX 12
 
 #define CAP_TX 5
 #define CAP_RX 6
 #define CAP_SAMPLES 15
 #define CAP_THRESHOLD 100
 
+
+#define SILENCE_AFTER_READ 100
+
+#define STATE_UPDATE 50
+
 CapTouch capTouch = CapTouch(CAP_TX, CAP_RX);
 
 #define NUM_POLES 20
 #define TOUCH_TIMEOUT 500
 
-#define TX_PERIOD 60 + 20 * MY_INDEX
+#define TX_PERIOD 50 + 10 * MY_INDEX
 
-#define CAP_SENSE_PERIOD 100
+#define CAP_SENSE_PERIOD 200
 
-#define ROM {0x28, MY_INDEX, 0x00, 0x00, 0x00, 0x00, 0x02}
+#define ROM {0x28, MY_INDEX, 0xab, 0x00, 0x00, 0x00, 0x02}
 
 
 
@@ -53,7 +59,8 @@ SoftwareSerialWithHalfDuplex mySerial(10, 11, false, false);
 void setup()
 {
 
-  pinMode(LED_INDEX, OUTPUT);
+  pinMode(TOUCH_LED_INDEX, OUTPUT);
+  pinMode(CONNECT_LED_INDEX, OUTPUT);
 
   Serial.begin(115200);
   mySerial.begin(38400);
@@ -84,7 +91,7 @@ void setup()
     
   const byte owROM[7] = ROM;
 
- // OWSlave.setReceiveCallback(&owReceive);
+//  OWSlave.setReceiveCallback(&owReceive);
 //  OWSlave.begin(owROM, oneWireData.getPinNumber());
 
 }
@@ -113,8 +120,7 @@ unsigned long lastread = 0;
 
 bool checkConnect() {
   static uint8_t windowindex = 0;
-  
-  uint8_t lastreceived = 0xff;
+  static uint8_t lastreceived = 0xff;
   
   static unsigned int lineindex = 0;
   unsigned long now = millis();
@@ -159,8 +165,6 @@ bool checkConnect() {
         Serial.print(" detect");
         Serial.println(poleindex);
         poletimes[poleindex] = now + TOUCH_TIMEOUT;
-  
-        copyState();
       }      
     }
   }
@@ -172,26 +176,36 @@ void loop()
 {
   
   static uint8_t windowindex = 0;
-  
-  uint8_t lastreceived = 0xff;
-  
   static unsigned int lineindex = 0;
+  static unsigned long silencedeadline = 0;
+  static unsigned long stateupdate_deadline = 0;
   
   bool gotSomething = checkConnect();
 
-  digitalWrite(LED_INDEX, gotSomething);
 
+  unsigned long now = millis();
   if (gotSomething)
   {
+            silencedeadline = now + SILENCE_AFTER_READ;
             Serial.println("GOT SOMETHINGGGGGGGG");
 
     return;
   }
 
+
+  if (now > stateupdate_deadline)
+  {
+      stateupdate_deadline = now + STATE_UPDATE;
+      copyState();
+  }
+
    //     Serial.println(" got nothing");
 
         
-  unsigned long now = millis();
+
+  if (now < silencedeadline) {
+    return;
+  }
   
   if (now > capdeadline)
   {
@@ -201,7 +215,6 @@ void loop()
       poletimes[MY_INDEX] = now + TOUCH_TIMEOUT;
  Serial.println("I'm touched");
 
-      copyState();
     }
     pinMode(CAP_TX, INPUT);
   }
@@ -223,13 +236,28 @@ void copyState()
 
   unsigned long now = millis();
   uint8_t currentstate[COUNT_OF(scratchpad)] = {'\0'};
+
+  bool istouch = false;
+  bool isconnect = false;
+
   for (int i = 0; i < NUM_POLES; i++)
   {
-    if (poletimes[i] < now)
+    if (poletimes[i] > now)
     {
       currentstate[i >> 3] |= (1 << (i & 0x7));
+
+      if (i==MY_INDEX) {
+        istouch = true;
+      } else {
+        isconnect = true;
+      }
+
     }
   }
+
+
+  digitalWrite(TOUCH_LED_INDEX, istouch ? HIGH : LOW);
+  digitalWrite(CONNECT_LED_INDEX, isconnect ? HIGH : LOW);
 
   currentstate[COUNT_OF(currentstate)-1] = OWSlave.crc8(currentstate, COUNT_OF(currentstate)-1);
 
