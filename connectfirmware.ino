@@ -6,33 +6,67 @@
 #include "LowLevel.h"
 #include "CapTouch.h"
 
+
+constexpr int MY_INDEX{2};
+constexpr int NUM_POLES{20};
+
+
+#define USE_PWM
+
+#ifdef USE_PWM
+
+#include "FreqMeasure.h"
+#include "TimerOne.h"
+
+constexpr unsigned long FREQ_TIMEOUT{100};
+
+
+constexpr unsigned long freqmeasure_pin {8};
+constexpr unsigned long signal_pin {9};
+
+constexpr unsigned long FREQ_START {500};
+constexpr unsigned long FREQ_END {1000};
+
+constexpr unsigned long FREQ_SKIP {(FREQ_END-FREQ_START)/(NUM_POLES-1)};
+constexpr unsigned long FREQ_SENSE {FREQ_SKIP*20/100}; // 20%
+
+
+constexpr unsigned long SIGNAL_FREQ {FREQ_START + FREQ_SKIP*MY_INDEX};
+constexpr unsigned long signal_freq_for(int index) {return FREQ_START + FREQ_SKIP*index;}
+
+
+constexpr unsigned long BROADCAST_TIME {10};
+
+#else
+
 #include "SoftwareSerialWithHalfDuplex.h"
 
+SoftwareSerialWithHalfDuplex mySerial(10, 11, false, false);
 
-#define MY_INDEX 1
+#endif
 
-#define TOUCH_LED_INDEX 13
-#define CONNECT_LED_INDEX 12
+constexpr uint8_t TOUCH_LED_INDEX  {13};
+constexpr uint8_t CONNECT_LED_INDEX  {12};
 
-#define CAP_TX 5
-#define CAP_RX 6
+constexpr uint8_t CAP_TX{5};
+constexpr uint8_t CAP_RX{6};
+
+constexpr uint8_t pin_onewire{7};
+
 #define CAP_SAMPLES 15
 #define CAP_THRESHOLD 100
 
-
-#define SILENCE_AFTER_READ 100
+#define SILENCE_AFTER_READ 20
 
 #define STATE_UPDATE 50
 
 CapTouch capTouch = CapTouch(CAP_TX, CAP_RX);
 
-#define NUM_POLES 20
 #define TOUCH_TIMEOUT 500
 
-#define TX_PERIOD 50 + 10 * MY_INDEX
+#define TX_PERIOD (50 + ((5 * MY_INDEX) % 50))
 
-#define CAP_SENSE_PERIOD 200
-
+#define CAP_SENSE_PERIOD 100
 
 enum DeviceState
 {
@@ -45,22 +79,12 @@ volatile DeviceState state = DS_WaitingReset;
 // scratchpad, with the CRC byte at the end
 volatile byte scratchpad[9];
 
-// This is the pin that will be used for one-wire data (depending on your arduino model, you are limited to a few choices, because some pins don't have complete interrupt support)
-// On Arduino Uno, you can use pin 2 or pin 3
-Pin oneWireData(2);
-
 // This is the ROM the arduino will respond to, make sure it doesn't conflict with another device
 
 #define CONNECT_READ_STATE 0xBE
 
-SoftwareSerialWithHalfDuplex mySerial(10, 11, false, false);
-
-
-
-constexpr uint8_t pin_onewire   { 8 };
-
 auto hub = OneWireHub(pin_onewire);
-auto pole = OneWirePole(MY_INDEX); 
+auto pole = OneWirePole(MY_INDEX);
 void setup()
 {
 
@@ -68,13 +92,15 @@ void setup()
   pinMode(CONNECT_LED_INDEX, OUTPUT);
 
   Serial.begin(115200);
+#ifdef USE_PWM
+  FreqMeasure.begin();
+#else
   mySerial.begin(38400);
+#endif
 
   delay(500);
-  
-  
-  Serial.println(" setup setup");
 
+  Serial.println(" setup setup");
 
   // put your setup code here, to run once:
   // try to read 4 bytes from the serial.
@@ -88,17 +114,15 @@ void setup()
 
   // write our id to the serial
 
-
   Serial.println("calibrating");
   capTouch.readTouch(CAP_SAMPLES);
   Serial.println("setting send pin back to input");
   pinMode(CAP_TX, INPUT);
-    
+
   hub.attach(pole);
- 
 }
 
-#define SEND_INDEX (MY_INDEX+1)
+#define SEND_INDEX (MY_INDEX + 1)
 
 uint8_t myid[] = {SEND_INDEX, SEND_INDEX, SEND_INDEX, SEND_INDEX, SEND_INDEX};
 
@@ -109,8 +133,8 @@ bool touchdetect()
 
   long res = capTouch.readTouch(CAP_SAMPLES);
 
- // Serial.print(" cap result      ");
- // Serial.println(res);
+  // Serial.print(" cap result      ");
+  // Serial.println(res);
 
   return res > CAP_THRESHOLD;
 }
@@ -119,22 +143,83 @@ unsigned long txdeadline = 0;
 unsigned long capdeadline = 0;
 unsigned long lastread = 0;
 #define READTIMEOUT 1000
+#ifdef USE_PWM
 
-bool checkConnect() {
+bool checkConnect()
+{
+  static unsigned int lineindex = 0;
+  static int count = 0;
+  static unsigned long sum = 0;
+
+  if (!FreqMeasure.available())
+  {
+    return false;
+  }
+  unsigned long now = millis();
+
+
+    if (now > (lastread + READTIMEOUT))
+    {
+      count = 0;
+    sum = 0;
+    }
+
+while (FreqMeasure.available()) {
+  count++;
+  sum += FreqMeasure.read();
+
+  if (count == 4) {
+
+    int poleindex = count_to_pole_index(sum / count);
+    if (poleindex >= 0) {
+        Serial.print(lineindex++);
+        Serial.print(" detect");
+        Serial.println(poleindex);
+        poletimes[poleindex] = now + TOUCH_TIMEOUT;
+    }
+
+    count = 0;
+    sum = 0;
+  }
+
+}
+
+lastread = now;
+  return true;
+}
+
+int count_to_pole_index(unsigned long count) {
+  unsigned long freq = F_CPU / count;
+
+  for (int i = 0; i < NUM_POLES;++i) {
+    unsigned long freq = signal_freq_for(i);
+    unsigned long minfreq = freq - FREQ_SENSE;
+    unsigned long maxfreq = freq + FREQ_SENSE;
+    if((minfreq < freq) && (freq <= maxfreq)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+#else
+
+bool checkConnect()
+{
   static uint8_t windowindex = 0;
   static uint8_t lastreceived = 0xff;
-  
+
   static unsigned int lineindex = 0;
   unsigned long now = millis();
   bool gotSomething = false;
   while (mySerial.available() > 0)
   {
     byte readbyte = mySerial.read();
-    if ((readbyte == 0) || (readbyte == SEND_INDEX) )
+    if ((readbyte == 0) || (readbyte == SEND_INDEX))
     {
       continue;
     }
-    
+
     gotSomething = true;
 
     if (now > (lastread + READTIMEOUT))
@@ -143,98 +228,127 @@ bool checkConnect() {
       windowindex = 0;
     }
 
-    
     lastread = now;
     // send index is +1..
     int poleindex = readbyte - 1;
 
-    if (poleindex >= NUM_POLES) {
+    if (poleindex >= NUM_POLES)
+    {
       // impossible..
       return false;
     }
 
-    if (lastreceived != poleindex) {
+    if (lastreceived != poleindex)
+    {
       lastreceived = poleindex;
-       windowindex = 1;
-    } else {
-      
+      windowindex = 1;
+    }
+    else
+    {
+
       windowindex++;
-      if (windowindex == 4) { //we saw 4 bytes!
+      if (windowindex == 4)
+      { //we saw 4 bytes!
         windowindex = 0;
         lastreceived = 0xff;
-        
+
         Serial.print(lineindex++);
         Serial.print(" detect");
         Serial.println(poleindex);
         poletimes[poleindex] = now + TOUCH_TIMEOUT;
-      }      
+      }
     }
   }
   return gotSomething;
-  
 }
+#endif
 
 void loop()
 {
-  
+
   static uint8_t windowindex = 0;
   static unsigned int lineindex = 0;
   static unsigned long silencedeadline = 0;
   static unsigned long stateupdate_deadline = 0;
-  
 
   hub.poll();
 
   bool gotSomething = checkConnect();
 
-
   unsigned long now = millis();
   if (gotSomething)
   {
-            silencedeadline = now + SILENCE_AFTER_READ;
-            Serial.println("GOT SOMETHINGGGGGGGG");
+    silencedeadline = now + SILENCE_AFTER_READ;
+    Serial.println("GOT SOMETHINGGGGGGGG");
 
     return;
   }
-
 
   if (now > stateupdate_deadline)
   {
-      stateupdate_deadline = now + STATE_UPDATE;
-      copyState();
+    stateupdate_deadline = now + STATE_UPDATE;
+    copyState();
   }
 
-   //     Serial.println(" got nothing");
+  //     Serial.println(" got nothing");
 
-        
-
-  if (now < silencedeadline) {
+  if (now < silencedeadline)
+  {
     return;
   }
-  
+
   if (now > capdeadline)
   {
     capdeadline = now + CAP_SENSE_PERIOD;
+    FreqMeasure.end();
     if (touchdetect())
     {
       poletimes[MY_INDEX] = now + TOUCH_TIMEOUT;
- Serial.println("I'm touched");
-
+      Serial.println("I'm touched");
     }
     pinMode(CAP_TX, INPUT);
+    FreqMeasure.begin();
   }
 
   if (now > txdeadline)
   {
-
     txdeadline = now + TX_PERIOD;
-
-    for (int i = 0; i < 2; i++)
-    {
-      mySerial.write(myid, COUNT_OF(myid));
-    }
+    FreqMeasure.end();    
+    send_myself();
+    FreqMeasure.begin(); 
   }
 }
+
+#ifdef USE_PWM
+
+void send_myself()
+{
+  // start pwm on pin 8 9 or 
+  
+  unsigned long  micro = 1000000ul / SIGNAL_FREQ;
+   Timer1.initialize(micro);
+   Timer1.pwm(signal_pin, 512);
+   // wait for time
+   unsigned long deadine = millis() + BROADCAST_TIME;
+   while (millis() < deadine){
+    hub.poll();
+   }
+
+    Timer1.disablePwm(signal_pin);
+    
+
+}
+#else
+
+void send_myself()
+{
+  for (int i = 0; i < 2; i++)
+  {
+    mySerial.write(myid, COUNT_OF(myid));
+  }
+}
+
+#endif
 
 void copyState()
 {
@@ -250,19 +364,19 @@ void copyState()
     {
       currentstate[(i >> 3)] |= (1 << (i & 0x7));
 
-      if (i==MY_INDEX) {
+      if (i == MY_INDEX)
+      {
         istouch = true;
-      } else {
+      }
+      else
+      {
         isconnect = true;
       }
-
     }
   }
-
 
   digitalWrite(TOUCH_LED_INDEX, istouch ? HIGH : LOW);
   digitalWrite(CONNECT_LED_INDEX, isconnect ? HIGH : LOW);
 
   pole.copy_scrachpad(currentstate, COUNT_OF(currentstate));
-
 }
