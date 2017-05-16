@@ -28,9 +28,9 @@ constexpr unsigned long FREQ_SENSE{FREQ_SKIP * 10 / 100}; // 10%
 unsigned long SIGNAL_FREQ;
 constexpr unsigned long signal_freq_for(int index) { return FREQ_START + FREQ_SKIP * index; }
 
-constexpr unsigned long BROADCAST_TIME{10};
+constexpr unsigned long BROADCAST_TIME{20};
 
-constexpr unsigned long WINDOW_LENGTH{10};
+constexpr unsigned long WINDOW_LENGTH{5};
 
 #else
 
