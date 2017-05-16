@@ -13,25 +13,24 @@ constexpr int NUM_POLES{20};
 
 #ifdef USE_PWM
 
-#include "FreqCount.h"
+#include "FreqMeasure.h"
 #include "TimerOne.h"
 
 constexpr unsigned long FREQ_TIMEOUT{100};
 
-constexpr unsigned long freqCFreqCount_pin{5};
+constexpr unsigned long freqmeasure_pin{8};
 constexpr unsigned long signal_pin{9};
 
-constexpr unsigned long FREQ_START{1000};
-constexpr unsigned long FREQ_END{2000};
+constexpr unsigned long FREQ_START{400};
+constexpr unsigned long FREQ_END{1000};
 
 constexpr unsigned long FREQ_SKIP{(FREQ_END - FREQ_START) / (NUM_POLES - 1)};
-constexpr unsigned long FREQ_SENSE{FREQ_SKIP * 20 / 100}; // 20%
+constexpr unsigned long FREQ_SENSE{FREQ_SKIP * 10 / 100}; // 10%
 
 constexpr unsigned long SIGNAL_FREQ{FREQ_START + FREQ_SKIP * MY_INDEX};
 constexpr unsigned long signal_freq_for(int index) { return FREQ_START + FREQ_SKIP * index; }
 
 constexpr unsigned long BROADCAST_TIME{20};
-constexpr unsigned long GATE_INTERVAL{5};
 
 #else
 
@@ -90,8 +89,6 @@ void setup()
   Serial.begin(115200);
   Serial.println(" setup setup");
 
-
-
   // put your setup code here, to run once:
   // try to read 4 bytes from the serial.
   // if all 4 bytes are the same, mark it is being connect
@@ -112,7 +109,7 @@ void setup()
   hub.attach(pole);
 
 #ifdef USE_PWM
- FreqCount.begin(GATE_INTERVAL); 
+  FreqMeasure.begin();
 #else
   mySerial.begin(38400);
   delay(500);
@@ -148,7 +145,7 @@ bool checkConnect()
   static int count = 0;
   static unsigned long sum = 0;
 
-  if (!FreqCount.available())
+  if (!FreqMeasure.available())
   {
     return false;
   }
@@ -160,29 +157,32 @@ bool checkConnect()
     sum = 0;
   }
 
-  while (FreqCount.available())
+  while (FreqMeasure.available())
   {
-    count++;
-    unsigned long reading = FreqCount.read();
-    if (reading <= 1 ) {
-      return false;
-    }
-    sum += reading;
-    Serial.print(reading);
-    Serial.print(" ");
-    Serial.println((reading)*1000/GATE_INTERVAL);
+    unsigned long reading = FreqMeasure.read();
+    unsigned long freq = F_CPU/reading;
 
-    if (count == 2)
+    if (freq < (FREQ_START - FREQ_SKIP)) {
+      continue;
+    }
+    if (freq > (FREQ_END + FREQ_SKIP)) {
+      continue;
+    }
+Serial.println(freq);
+
+    count++;
+    sum += reading;
+
+    if (count == 10)
     {
 
-    Serial.println((sum / count)*1000/GATE_INTERVAL);
-      int poleindex = count_to_pole_index(  sum / count);
+      int poleindex = count_to_pole_index(sum / count);
       if (poleindex >= 0)
       {
-        Serial.print(lineindex++);
-        Serial.print(" detect");
-        Serial.println(poleindex);
-        Serial.println(sum / count);
+            Serial.print(lineindex++);
+             Serial.print(" detect ");
+             Serial.println(poleindex);
+             Serial.println(F_CPU / (sum / count));
         poletimes[poleindex] = now + TOUCH_TIMEOUT;
       }
 
@@ -197,14 +197,14 @@ bool checkConnect()
 
 int count_to_pole_index(unsigned long count)
 {
-  unsigned long freq = count*1000/GATE_INTERVAL;
+  unsigned long freq = F_CPU / count;
 
   for (int i = 0; i < NUM_POLES; ++i)
   {
     unsigned long curfreq = signal_freq_for(i);
     unsigned long minfreq = curfreq - FREQ_SENSE;
     unsigned long maxfreq = curfreq + FREQ_SENSE;
-    
+
     if ((minfreq < freq) && (freq <= maxfreq))
     {
       return i;
@@ -290,7 +290,7 @@ void loop()
   if (gotSomething)
   {
     silencedeadline = now + SILENCE_AFTER_READ;
-//    Serial.println("GOT SOMETHINGGGGGGGG");
+    //    Serial.println("GOT SOMETHINGGGGGGGG");
     return;
   }
 
@@ -308,13 +308,13 @@ void loop()
   }
 
   if (now > capdeadline)
-  { 
+  {
 
     capdeadline = now + CAP_SENSE_PERIOD;
-    
-    FreqCount.end();
-      pinMode(freqCFreqCount_pin, INPUT);
-      pinMode(signal_pin, INPUT);
+
+    FreqMeasure.end();
+    pinMode(freqmeasure_pin, INPUT);
+    pinMode(signal_pin, INPUT);
 
     if (touchdetect())
     {
@@ -323,20 +323,19 @@ void loop()
     }
     pinMode(CAP_TX, INPUT);
     pinMode(CAP_RX, INPUT);
-    FreqCount.begin(GATE_INTERVAL);
-    
+    FreqMeasure.begin();
   }
 
   if (now > txdeadline)
   {
-    
+
     txdeadline = now + TX_PERIOD;
-    FreqCount.end();
-    pinMode(freqCFreqCount_pin, INPUT);
+    FreqMeasure.end();
+    pinMode(freqmeasure_pin, INPUT);
     pinMode(signal_pin, INPUT);
     send_myself();
-    pinMode(signal_pin, INPUT);    
-    FreqCount.begin(GATE_INTERVAL);
+    pinMode(signal_pin, INPUT);
+    FreqMeasure.begin();
   }
 }
 
