@@ -40,8 +40,8 @@ SoftwareSerialWithHalfDuplex mySerial(10, 11, false, false);
 
 #endif
 
-constexpr uint8_t TOUCH_LED_INDEX{12};
-constexpr uint8_t CONNECT_LED_INDEX{13};
+constexpr uint8_t TOUCH_LED_INDEX{13};
+constexpr uint8_t CONNECT_LED_INDEX{12};
 
 constexpr uint8_t CAP_TX{4};
 constexpr uint8_t CAP_RX{6};
