@@ -6,10 +6,8 @@
 #include "LowLevel.h"
 #include "CapTouch.h"
 
-
-constexpr int MY_INDEX{2};
+constexpr int MY_INDEX{3};
 constexpr int NUM_POLES{20};
-
 
 #define USE_PWM
 
@@ -20,22 +18,19 @@ constexpr int NUM_POLES{20};
 
 constexpr unsigned long FREQ_TIMEOUT{100};
 
+constexpr unsigned long freqmeasure_pin{8};
+constexpr unsigned long signal_pin{9};
 
-constexpr unsigned long freqmeasure_pin {8};
-constexpr unsigned long signal_pin {9};
+constexpr unsigned long FREQ_START{400};
+constexpr unsigned long FREQ_END{1000};
 
-constexpr unsigned long FREQ_START {500};
-constexpr unsigned long FREQ_END {1000};
+constexpr unsigned long FREQ_SKIP{(FREQ_END - FREQ_START) / (NUM_POLES - 1)};
+constexpr unsigned long FREQ_SENSE{FREQ_SKIP * 20 / 100}; // 20%
 
-constexpr unsigned long FREQ_SKIP {(FREQ_END-FREQ_START)/(NUM_POLES-1)};
-constexpr unsigned long FREQ_SENSE {FREQ_SKIP*20/100}; // 20%
+constexpr unsigned long SIGNAL_FREQ{FREQ_START + FREQ_SKIP * MY_INDEX};
+constexpr unsigned long signal_freq_for(int index) { return FREQ_START + FREQ_SKIP * index; }
 
-
-constexpr unsigned long SIGNAL_FREQ {FREQ_START + FREQ_SKIP*MY_INDEX};
-constexpr unsigned long signal_freq_for(int index) {return FREQ_START + FREQ_SKIP*index;}
-
-
-constexpr unsigned long BROADCAST_TIME {10};
+constexpr unsigned long BROADCAST_TIME{10};
 
 #else
 
@@ -45,8 +40,8 @@ SoftwareSerialWithHalfDuplex mySerial(10, 11, false, false);
 
 #endif
 
-constexpr uint8_t TOUCH_LED_INDEX  {13};
-constexpr uint8_t CONNECT_LED_INDEX  {12};
+constexpr uint8_t TOUCH_LED_INDEX{13};
+constexpr uint8_t CONNECT_LED_INDEX{12};
 
 constexpr uint8_t CAP_TX{5};
 constexpr uint8_t CAP_RX{6};
@@ -92,15 +87,9 @@ void setup()
   pinMode(CONNECT_LED_INDEX, OUTPUT);
 
   Serial.begin(115200);
-#ifdef USE_PWM
-  FreqMeasure.begin();
-#else
-  mySerial.begin(38400);
-#endif
-
-  delay(500);
-
   Serial.println(" setup setup");
+
+
 
   // put your setup code here, to run once:
   // try to read 4 bytes from the serial.
@@ -120,6 +109,13 @@ void setup()
   pinMode(CAP_TX, INPUT);
 
   hub.attach(pole);
+
+#ifdef USE_PWM
+  FreqMeasure.begin();
+#else
+  mySerial.begin(38400);
+  delay(500);
+#endif
 }
 
 #define SEND_INDEX (MY_INDEX + 1)
@@ -157,45 +153,53 @@ bool checkConnect()
   }
   unsigned long now = millis();
 
-
-    if (now > (lastread + READTIMEOUT))
-    {
-      count = 0;
-    sum = 0;
-    }
-
-while (FreqMeasure.available()) {
-  count++;
-  sum += FreqMeasure.read();
-
-  if (count == 4) {
-
-    int poleindex = count_to_pole_index(sum / count);
-    if (poleindex >= 0) {
-        Serial.print(lineindex++);
-        Serial.print(" detect");
-        Serial.println(poleindex);
-        poletimes[poleindex] = now + TOUCH_TIMEOUT;
-    }
-
+  if (now > (lastread + READTIMEOUT))
+  {
     count = 0;
     sum = 0;
   }
 
-}
+  while (FreqMeasure.available())
+  {
+    count++;
+    unsigned long reading = FreqMeasure.read();
+    sum += reading;
+      Serial.println(F_CPU / reading);
 
-lastread = now;
+    if (count == 4)
+    {
+
+      int poleindex = count_to_pole_index(sum / count);
+      if (poleindex >= 0)
+      {
+   //     Serial.print(lineindex++);
+   //     Serial.print(" detect");
+   //     Serial.println(poleindex);
+   //     Serial.println(sum / count);
+        poletimes[poleindex] = now + TOUCH_TIMEOUT;
+      }
+
+      count = 0;
+      sum = 0;
+    }
+  }
+
+  lastread = now;
   return true;
 }
 
-int count_to_pole_index(unsigned long count) {
+int count_to_pole_index(unsigned long count)
+{
   unsigned long freq = F_CPU / count;
 
-  for (int i = 0; i < NUM_POLES;++i) {
-    unsigned long freq = signal_freq_for(i);
-    unsigned long minfreq = freq - FREQ_SENSE;
-    unsigned long maxfreq = freq + FREQ_SENSE;
-    if((minfreq < freq) && (freq <= maxfreq)) {
+  for (int i = 0; i < NUM_POLES; ++i)
+  {
+    unsigned long curfreq = signal_freq_for(i);
+    unsigned long minfreq = curfreq - FREQ_SENSE;
+    unsigned long maxfreq = curfreq + FREQ_SENSE;
+    
+    if ((minfreq < freq) && (freq <= maxfreq))
+    {
       return i;
     }
   }
@@ -253,7 +257,7 @@ bool checkConnect()
         lastreceived = 0xff;
 
         Serial.print(lineindex++);
-        Serial.print(" detect");
+        Serial.print(" detect ");
         Serial.println(poleindex);
         poletimes[poleindex] = now + TOUCH_TIMEOUT;
       }
@@ -279,8 +283,7 @@ void loop()
   if (gotSomething)
   {
     silencedeadline = now + SILENCE_AFTER_READ;
-    Serial.println("GOT SOMETHINGGGGGGGG");
-
+//    Serial.println("GOT SOMETHINGGGGGGGG");
     return;
   }
 
@@ -298,24 +301,35 @@ void loop()
   }
 
   if (now > capdeadline)
-  {
+  { 
+
     capdeadline = now + CAP_SENSE_PERIOD;
+    
     FreqMeasure.end();
+      pinMode(freqmeasure_pin, INPUT);
+      pinMode(signal_pin, INPUT);
+
     if (touchdetect())
     {
+
       poletimes[MY_INDEX] = now + TOUCH_TIMEOUT;
-      Serial.println("I'm touched");
     }
     pinMode(CAP_TX, INPUT);
+    pinMode(CAP_RX, INPUT);
     FreqMeasure.begin();
+    
   }
 
   if (now > txdeadline)
   {
+    
     txdeadline = now + TX_PERIOD;
-    FreqMeasure.end();    
+    FreqMeasure.end();
+    pinMode(freqmeasure_pin, INPUT);
+    pinMode(signal_pin, INPUT);
     send_myself();
-    FreqMeasure.begin(); 
+    pinMode(signal_pin, INPUT);    
+    FreqMeasure.begin();
   }
 }
 
@@ -323,20 +337,19 @@ void loop()
 
 void send_myself()
 {
-  // start pwm on pin 8 9 or 
-  
-  unsigned long  micro = 1000000ul / SIGNAL_FREQ;
-   Timer1.initialize(micro);
-   Timer1.pwm(signal_pin, 512);
-   // wait for time
-   unsigned long deadine = millis() + BROADCAST_TIME;
-   while (millis() < deadine){
+  // start pwm on pin 8 9 or
+
+  unsigned long micro = 1000000ul / SIGNAL_FREQ;
+  Timer1.initialize(micro);
+  Timer1.pwm(signal_pin, 512);
+  // wait for time
+  unsigned long deadine = millis() + BROADCAST_TIME;
+  while (millis() < deadine)
+  {
     hub.poll();
-   }
+  }
 
-    Timer1.disablePwm(signal_pin);
-    
-
+  Timer1.disablePwm(signal_pin);
 }
 #else
 
