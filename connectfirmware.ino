@@ -6,7 +6,7 @@
 #include "LowLevel.h"
 #include "CapTouch.h"
 
-constexpr int MY_INDEX{1};
+int MY_INDEX = 4;
 constexpr int NUM_POLES{20};
 
 #define USE_PWM
@@ -16,21 +16,21 @@ constexpr int NUM_POLES{20};
 #include "FreqMeasure.h"
 #include "TimerOne.h"
 
-constexpr unsigned long FREQ_TIMEOUT{100};
-
 constexpr unsigned long freqmeasure_pin{8};
 constexpr unsigned long signal_pin{9};
 
-constexpr unsigned long FREQ_START{400};
-constexpr unsigned long FREQ_END{1000};
+constexpr unsigned long FREQ_START{300};
+constexpr unsigned long FREQ_END{1300};
 
 constexpr unsigned long FREQ_SKIP{(FREQ_END - FREQ_START) / (NUM_POLES - 1)};
 constexpr unsigned long FREQ_SENSE{FREQ_SKIP * 10 / 100}; // 10%
 
-constexpr unsigned long SIGNAL_FREQ{FREQ_START + FREQ_SKIP * MY_INDEX};
+unsigned long SIGNAL_FREQ;
 constexpr unsigned long signal_freq_for(int index) { return FREQ_START + FREQ_SKIP * index; }
 
-constexpr unsigned long BROADCAST_TIME{20};
+constexpr unsigned long BROADCAST_TIME{10};
+
+constexpr unsigned long WINDOW_LENGTH{10};
 
 #else
 
@@ -40,28 +40,27 @@ SoftwareSerialWithHalfDuplex mySerial(10, 11, false, false);
 
 #endif
 
-constexpr uint8_t TOUCH_LED_INDEX{13};
-constexpr uint8_t CONNECT_LED_INDEX{12};
+constexpr uint8_t TOUCH_LED_INDEX{12};
+constexpr uint8_t CONNECT_LED_INDEX{13};
 
 constexpr uint8_t CAP_TX{4};
 constexpr uint8_t CAP_RX{6};
 
 constexpr uint8_t pin_onewire{7};
 
-#define CAP_SAMPLES 15
-#define CAP_THRESHOLD 100
+constexpr unsigned int CAP_SAMPLES{15};
+constexpr unsigned int CAP_THRESHOLD{100};
 
-#define SILENCE_AFTER_READ 20
-
-#define STATE_UPDATE 50
+constexpr unsigned int SILENCE_AFTER_READ{20};
+constexpr unsigned int STATE_UPDATE{50};
 
 CapTouch capTouch = CapTouch(CAP_TX, CAP_RX);
 
-#define TOUCH_TIMEOUT 500
+constexpr unsigned int TOUCH_TIMEOUT{500};
 
-#define TX_PERIOD (50 + ((5 * MY_INDEX) % 50))
+unsigned int TxPeriod() {return (50 + ((5 * MY_INDEX) % 50));}
 
-#define CAP_SENSE_PERIOD 100
+constexpr unsigned int CAP_SENSE_PERIOD {100};
 
 enum DeviceState
 {
@@ -79,14 +78,35 @@ volatile byte scratchpad[9];
 #define CONNECT_READ_STATE 0xBE
 
 auto hub = OneWireHub(pin_onewire);
-auto pole = OneWirePole(MY_INDEX);
+OneWirePole* pole = nullptr;
+
+int getbit(int pin, int bit){if (digitalRead(pin) == LOW) return 1 << bit ; else return 0;}
+
 void setup()
 {
+
+  pinMode(3, INPUT_PULLUP);
+  pinMode(A0, INPUT_PULLUP);
+  pinMode(A1, INPUT_PULLUP);
+  pinMode(A2, INPUT_PULLUP);
+  pinMode(A3, INPUT_PULLUP);
+  delay(1);
+  MY_INDEX = getbit(3,0) | getbit(A0,1) | getbit(A1,2) | getbit(A2,3) | getbit(A3,4);
+
+  pinMode(3, INPUT);
+  pinMode(A0, INPUT);
+  pinMode(A1, INPUT);
+  pinMode(A2, INPUT);
+  pinMode(A3, INPUT);
+
+SIGNAL_FREQ = signal_freq_for(MY_INDEX);
+pole = new  OneWirePole(MY_INDEX);
 
   pinMode(TOUCH_LED_INDEX, OUTPUT);
   pinMode(CONNECT_LED_INDEX, OUTPUT);
 
   Serial.begin(115200);
+  Serial.print(MY_INDEX);
   Serial.println(" setup setup");
 
   // put your setup code here, to run once:
@@ -106,7 +126,7 @@ void setup()
   Serial.println("setting send pin back to input");
   pinMode(CAP_TX, INPUT);
 
-  hub.attach(pole);
+  hub.attach(*pole);
 
 #ifdef USE_PWM
   FreqMeasure.begin();
@@ -116,9 +136,6 @@ void setup()
 #endif
 }
 
-#define SEND_INDEX (MY_INDEX + 1)
-
-uint8_t myid[] = {SEND_INDEX, SEND_INDEX, SEND_INDEX, SEND_INDEX, SEND_INDEX};
 
 unsigned long poletimes[NUM_POLES] = {0};
 
@@ -168,12 +185,12 @@ bool checkConnect()
     if (freq > (FREQ_END + FREQ_SKIP)) {
       continue;
     }
-Serial.println(freq);
+//Serial.println(freq);
 
     count++;
     sum += reading;
 
-    if (count == 10)
+    if (count == WINDOW_LENGTH)
     {
 
       int poleindex = count_to_pole_index(sum / count);
@@ -329,7 +346,7 @@ void loop()
   if (now > txdeadline)
   {
 
-    txdeadline = now + TX_PERIOD;
+    txdeadline = now + TxPeriod();
     FreqMeasure.end();
     pinMode(freqmeasure_pin, INPUT);
     pinMode(signal_pin, INPUT);
@@ -397,5 +414,5 @@ void copyState()
   digitalWrite(TOUCH_LED_INDEX, istouch ? HIGH : LOW);
   digitalWrite(CONNECT_LED_INDEX, isconnect ? HIGH : LOW);
 
-  pole.copy_scrachpad(currentstate, COUNT_OF(currentstate));
+  pole->copy_scrachpad(currentstate, COUNT_OF(currentstate));
 }
