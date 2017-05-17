@@ -37,7 +37,7 @@ constexpr unsigned long WINDOW_LENGTH{5};
 
 constexpr uint8_t SERIAL_RX_PIN{10};
 constexpr uint8_t SERIAL_TX_PIN{11};
-constexpr uint8_t SERIAL_RATE{4600};
+constexpr uint8_t SERIAL_RATE{4800};
 
 SoftwareSerialWithHalfDuplex mySerial(SERIAL_RX_PIN, SERIAL_TX_PIN, false, false);
 
@@ -255,8 +255,6 @@ bool checkConnect()
   {
     byte readbyte = mySerial.read();
 
-  Serial.print("we got some! availability");
-  Serial.println((int)readbyte);
     if ((readbyte == 0xFF) || (readbyte == 0) || (readbyte == WIRE_INDEXES[MY_INDEX])  || (readbyte == ~WIRE_INDEXES[MY_INDEX]))
     {
       continue;
@@ -274,18 +272,10 @@ bool checkConnect()
     // send index is +1..
     int poleindex = - 1;
     for (int i = 0; i < COUNT_OF(WIRE_INDEXES); i++) {
-      if (windowindex % 2) {
-        if (readbyte == ~WIRE_INDEXES[i]) {
-          poleindex = i;
-          break;
-        }
-      } else {
-        if (readbyte == WIRE_INDEXES[i]) {
-          poleindex = i;
-          break;
-        }
+      if ((readbyte == WIRE_INDEXES[i]) || (readbyte == ~WIRE_INDEXES[i])) {
+        poleindex = i;
+        break;
       }
-
     }
 
     if (poleindex < 0 )
@@ -298,9 +288,10 @@ bool checkConnect()
       return false;
     }
 
-            Serial.print(lineindex++);
-             Serial.print(" detect ");
-             Serial.println(poleindex);
+
+//        Serial.print(lineindex++);
+//        Serial.print(" GOT INDEX ");
+//        Serial.println(poleindex);
 
     if (lastreceived != poleindex)
     {
@@ -386,13 +377,13 @@ mySerial.begin(SERIAL_RATE);
 
     txdeadline = now + TxPeriod();
 //    FreqMeasure.end();
-mySerial.end();
+
 //    pinMode(freqmeasure_pin, INPUT);
 //    pinMode(signal_pin, INPUT);
     send_myself();
 //    pinMode(signal_pin, INPUT);
     //FreqMeasure.begin();
-    mySerial.begin(SERIAL_RATE);
+
   }
 }
 
@@ -426,10 +417,10 @@ void send_myself()
   {
     unsigned long now  = millis();
     mySerial.write(&id, 1);
-    while(millis() == now) hub.poll();
+//    while(millis() == now) hub.poll();
     mySerial.write(&notid, 1);
     now  = millis();
-    while(millis() == now) hub.poll();
+//    while(millis() == now) hub.poll();
   }
 }
 
