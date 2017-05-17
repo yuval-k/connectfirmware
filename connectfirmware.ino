@@ -37,7 +37,7 @@ constexpr unsigned long WINDOW_LENGTH{5};
 
 constexpr uint8_t SERIAL_RX_PIN{10};
 constexpr uint8_t SERIAL_TX_PIN{11};
-constexpr uint8_t SERIAL_RATE{4800};
+constexpr uint8_t SERIAL_RATE{4600};
 
 SoftwareSerialWithHalfDuplex mySerial(SERIAL_RX_PIN, SERIAL_TX_PIN, false, false);
 
@@ -66,7 +66,7 @@ CapTouch capTouch = CapTouch(CAP_TX, CAP_RX);
 
 constexpr unsigned int TOUCH_TIMEOUT{500};
 
-unsigned int TxPeriod() {return (100 + ((5 * MY_INDEX) % 50));}
+unsigned int TxPeriod() {return (500 + ((5 * MY_INDEX) % 50));}
 
 constexpr unsigned int CAP_SENSE_PERIOD {100};
 
@@ -250,7 +250,7 @@ bool checkConnect()
   static unsigned int lineindex = 0;
   unsigned long now = millis();
   bool gotSomething = false;
-  Serial.println("checking availability");
+  
   while (mySerial.available() > 0)
   {
     byte readbyte = mySerial.read();
@@ -274,10 +274,18 @@ bool checkConnect()
     // send index is +1..
     int poleindex = - 1;
     for (int i = 0; i < COUNT_OF(WIRE_INDEXES); i++) {
-      if ((readbyte == WIRE_INDEXES[i]) || (readbyte == ~WIRE_INDEXES[i])) {
-        poleindex = i;
-        break;
+      if (windowindex % 2) {
+        if (readbyte == ~WIRE_INDEXES[i]) {
+          poleindex = i;
+          break;
+        }
+      } else {
+        if (readbyte == WIRE_INDEXES[i]) {
+          poleindex = i;
+          break;
+        }
       }
+
     }
 
     if (poleindex < 0 )
@@ -289,6 +297,10 @@ bool checkConnect()
       // impossible..
       return false;
     }
+
+            Serial.print(lineindex++);
+             Serial.print(" detect ");
+             Serial.println(poleindex);
 
     if (lastreceived != poleindex)
     {
@@ -360,7 +372,7 @@ mySerial.end();
 
     if (touchdetect())
     {
-Serial.println("i'm touched");
+// Serial.println("i'm touched");
       poletimes[MY_INDEX] = now + TOUCH_TIMEOUT;
     }
     pinMode(CAP_TX, INPUT);
@@ -409,10 +421,15 @@ void send_myself()
 
   uint8_t id = WIRE_INDEXES[MY_INDEX];
   uint8_t notid = ~id;
-  for (int i = 0; i < 10; i++)
+
+  for (int i = 0; i < 2; i++)
   {
+    unsigned long now  = millis();
     mySerial.write(&id, 1);
+    while(millis() == now) hub.poll();
     mySerial.write(&notid, 1);
+    now  = millis();
+    while(millis() == now) hub.poll();
   }
 }
 
