@@ -9,7 +9,6 @@
 int MY_INDEX = 4;
 constexpr int NUM_POLES{20};
 
-#define USE_PWM
 
 #ifdef USE_PWM
 
@@ -36,7 +35,16 @@ constexpr unsigned long WINDOW_LENGTH{5};
 
 #include "SoftwareSerialWithHalfDuplex.h"
 
-SoftwareSerialWithHalfDuplex mySerial(10, 11, false, false);
+constexpr uint8_t SERIAL_RX_PIN{10};
+constexpr uint8_t SERIAL_TX_PIN{11};
+constexpr uint8_t SERIAL_RATE{4800};
+
+SoftwareSerialWithHalfDuplex mySerial(SERIAL_RX_PIN, SERIAL_TX_PIN, false, false);
+
+const uint8_t WIRE_INDEXES[NUM_POLES] = {42 ,25 ,37 ,91 ,112,
+                                         107,56 ,100, 62,89 ,
+                                         123, 29, 53,71 ,45,
+                                         14 , 77,122,86 ,22 };
 
 #endif
 
@@ -49,7 +57,7 @@ constexpr uint8_t CAP_RX{6};
 constexpr uint8_t pin_onewire{7};
 
 constexpr unsigned int CAP_SAMPLES{15};
-constexpr unsigned int CAP_THRESHOLD{100};
+constexpr unsigned int CAP_THRESHOLD{50};
 
 constexpr unsigned int SILENCE_AFTER_READ{20};
 constexpr unsigned int STATE_UPDATE{50};
@@ -58,7 +66,7 @@ CapTouch capTouch = CapTouch(CAP_TX, CAP_RX);
 
 constexpr unsigned int TOUCH_TIMEOUT{500};
 
-unsigned int TxPeriod() {return (50 + ((5 * MY_INDEX) % 50));}
+unsigned int TxPeriod() {return (100 + ((5 * MY_INDEX) % 50));}
 
 constexpr unsigned int CAP_SENSE_PERIOD {100};
 
@@ -99,7 +107,9 @@ void setup()
   pinMode(A2, INPUT);
   pinMode(A3, INPUT);
 
+#if ENABLE_PWD
 SIGNAL_FREQ = signal_freq_for(MY_INDEX);
+#endif 
 pole = new  OneWirePole(MY_INDEX);
 
   pinMode(TOUCH_LED_INDEX, OUTPUT);
@@ -131,7 +141,7 @@ pole = new  OneWirePole(MY_INDEX);
 #ifdef USE_PWM
   FreqMeasure.begin();
 #else
-  mySerial.begin(38400);
+  mySerial.begin(SERIAL_RATE);
   delay(500);
 #endif
 }
@@ -240,10 +250,14 @@ bool checkConnect()
   static unsigned int lineindex = 0;
   unsigned long now = millis();
   bool gotSomething = false;
+  Serial.println("checking availability");
   while (mySerial.available() > 0)
   {
     byte readbyte = mySerial.read();
-    if ((readbyte == 0) || (readbyte == SEND_INDEX))
+
+  Serial.print("we got some! availability");
+  Serial.println((int)readbyte);
+    if ((readbyte == 0xFF) || (readbyte == 0) || (readbyte == WIRE_INDEXES[MY_INDEX])  || (readbyte == ~WIRE_INDEXES[MY_INDEX]))
     {
       continue;
     }
@@ -258,8 +272,18 @@ bool checkConnect()
 
     lastread = now;
     // send index is +1..
-    int poleindex = readbyte - 1;
+    int poleindex = - 1;
+    for (int i = 0; i < COUNT_OF(WIRE_INDEXES); i++) {
+      if ((readbyte == WIRE_INDEXES[i]) || (readbyte == ~WIRE_INDEXES[i])) {
+        poleindex = i;
+        break;
+      }
+    }
 
+    if (poleindex < 0 )
+    {
+      return false;
+    }
     if (poleindex >= NUM_POLES)
     {
       // impossible..
@@ -329,30 +353,34 @@ void loop()
 
     capdeadline = now + CAP_SENSE_PERIOD;
 
-    FreqMeasure.end();
-    pinMode(freqmeasure_pin, INPUT);
-    pinMode(signal_pin, INPUT);
+//    FreqMeasure.end();
+mySerial.end();
+//    pinMode(freqmeasure_pin, INPUT);
+//    pinMode(signal_pin, INPUT);
 
     if (touchdetect())
     {
-
+Serial.println("i'm touched");
       poletimes[MY_INDEX] = now + TOUCH_TIMEOUT;
     }
     pinMode(CAP_TX, INPUT);
     pinMode(CAP_RX, INPUT);
-    FreqMeasure.begin();
+//    FreqMeasure.begin();
+mySerial.begin(SERIAL_RATE);
   }
 
   if (now > txdeadline)
   {
 
     txdeadline = now + TxPeriod();
-    FreqMeasure.end();
-    pinMode(freqmeasure_pin, INPUT);
-    pinMode(signal_pin, INPUT);
+//    FreqMeasure.end();
+mySerial.end();
+//    pinMode(freqmeasure_pin, INPUT);
+//    pinMode(signal_pin, INPUT);
     send_myself();
-    pinMode(signal_pin, INPUT);
-    FreqMeasure.begin();
+//    pinMode(signal_pin, INPUT);
+    //FreqMeasure.begin();
+    mySerial.begin(SERIAL_RATE);
   }
 }
 
@@ -378,9 +406,13 @@ void send_myself()
 
 void send_myself()
 {
-  for (int i = 0; i < 2; i++)
+
+  uint8_t id = WIRE_INDEXES[MY_INDEX];
+  uint8_t notid = ~id;
+  for (int i = 0; i < 10; i++)
   {
-    mySerial.write(myid, COUNT_OF(myid));
+    mySerial.write(&id, 1);
+    mySerial.write(&notid, 1);
   }
 }
 
