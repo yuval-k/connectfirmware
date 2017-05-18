@@ -66,7 +66,7 @@ CapTouch capTouch = CapTouch(CAP_TX, CAP_RX);
 
 constexpr unsigned int TOUCH_TIMEOUT{500};
 
-unsigned int TxPeriod() {return (500 + ((5 * MY_INDEX) % 50));}
+unsigned int TxPeriod() {return (100 + ((5 * MY_INDEX) % 50));}
 
 constexpr unsigned int CAP_SENSE_PERIOD {100};
 
