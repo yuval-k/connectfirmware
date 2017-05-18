@@ -417,7 +417,7 @@ void send_myself()
   uint8_t id = WIRE_INDEXES[MY_INDEX];
   uint8_t notid = ~id;
 
-  for (int i = 0; i < 2; i++)
+  for (int i = 0; i < 20; i++)
   {
 //    unsigned long now  = millis();
     mySerial.write(&id, 1);
