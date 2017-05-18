@@ -17,7 +17,7 @@ private:
 
 
 public:
-  inline copy_scrachpad(const uint8_t* data, size_t len) {
+  inline void copy_scrachpad(const uint8_t* data, size_t len) {
       int sizetocopy = min(len, COUNT_OF(scratchpad)-1);
       memcpy((void *)scratchpad, data, sizetocopy);
       updateCRC();

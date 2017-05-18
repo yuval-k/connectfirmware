@@ -1,7 +1,7 @@
 #include "OneWirePole.h"
 #include <OneWire.h>
 
-OneWirePole::OneWirePole(int index) : OneWireItem(0x33, index,0,0,0,0,0), scratchpad({0})
+OneWirePole::OneWirePole(int index) : OneWireItem(0x33, index,0,0,0,0,0), scratchpad{0}
 {
    
 }

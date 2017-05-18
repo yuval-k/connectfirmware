@@ -6,7 +6,7 @@
 #include "LowLevel.h"
 #include "CapTouch.h"
 
-int MY_INDEX = 4;
+unsigned MY_INDEX = 0;
 constexpr int NUM_POLES{20};
 
 
@@ -37,7 +37,7 @@ constexpr unsigned long WINDOW_LENGTH{5};
 
 constexpr uint8_t SERIAL_RX_PIN{10};
 constexpr uint8_t SERIAL_TX_PIN{11};
-constexpr uint8_t SERIAL_RATE{4800};
+constexpr int SERIAL_RATE{4800};
 
 SoftwareSerialWithHalfDuplex mySerial(SERIAL_RX_PIN, SERIAL_TX_PIN, false, false);
 
@@ -253,9 +253,9 @@ bool checkConnect()
   
   while (mySerial.available() > 0)
   {
-    byte readbyte = mySerial.read();
+    uint8_t readbyte = mySerial.read();
 
-    if ((readbyte == 0xFF) || (readbyte == 0) || (readbyte == WIRE_INDEXES[MY_INDEX])  || (readbyte == ~WIRE_INDEXES[MY_INDEX]))
+    if ((readbyte == 0xFF) || (readbyte == 0) || (readbyte == WIRE_INDEXES[MY_INDEX])  || (readbyte == (~WIRE_INDEXES[MY_INDEX])))
     {
       continue;
     }
@@ -271,7 +271,7 @@ bool checkConnect()
     lastread = now;
     // send index is +1..
     int poleindex = - 1;
-    for (int i = 0; i < COUNT_OF(WIRE_INDEXES); i++) {
+    for (unsigned i = 0; i < COUNT_OF(WIRE_INDEXES); i++) {
       if ((readbyte == WIRE_INDEXES[i]) || (readbyte == ~WIRE_INDEXES[i])) {
         poleindex = i;
         break;
@@ -415,11 +415,11 @@ void send_myself()
 
   for (int i = 0; i < 2; i++)
   {
-    unsigned long now  = millis();
+//    unsigned long now  = millis();
     mySerial.write(&id, 1);
 //    while(millis() == now) hub.poll();
     mySerial.write(&notid, 1);
-    now  = millis();
+//    now  = millis();
 //    while(millis() == now) hub.poll();
   }
 }
@@ -431,10 +431,11 @@ void copyState()
   unsigned long now = millis();
   uint8_t currentstate[8] = {'\0'};
 
+  static bool touching = false;
   bool istouch = false;
   bool isconnect = false;
 
-  for (int i = 0; i < COUNT_OF(poletimes); i++)
+  for (unsigned i = 0; i < COUNT_OF(poletimes); i++)
   {
     if (poletimes[i] > now)
     {
@@ -450,6 +451,16 @@ void copyState()
       }
     }
   }
+
+
+        if (istouch != touching) {
+          touching = istouch;
+          if (touching) {
+            Serial.println("i'm touched");
+          } else {
+            Serial.println("i'm NOT touched");
+          }
+        }
 
   digitalWrite(TOUCH_LED_INDEX, istouch ? HIGH : LOW);
   digitalWrite(CONNECT_LED_INDEX, isconnect ? HIGH : LOW);
