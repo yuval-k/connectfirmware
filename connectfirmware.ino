@@ -37,7 +37,7 @@ constexpr unsigned long WINDOW_LENGTH{5};
 
 constexpr uint8_t SERIAL_RX_PIN{10};
 constexpr uint8_t SERIAL_TX_PIN{11};
-constexpr int SERIAL_RATE{4800};
+constexpr unsigned long SERIAL_RATE{4800};
 
 SoftwareSerialWithHalfDuplex mySerial(SERIAL_RX_PIN, SERIAL_TX_PIN, false, false);
 
@@ -254,12 +254,13 @@ bool checkConnect()
   while (mySerial.available() > 0)
   {
     uint8_t readbyte = mySerial.read();
+    const uint8_t myindex = WIRE_INDEXES[MY_INDEX];
+    const uint8_t mynotindex = ~myindex;
 
-    if ((readbyte == 0xFF) || (readbyte == 0) || (readbyte == WIRE_INDEXES[MY_INDEX])  || (readbyte == (~WIRE_INDEXES[MY_INDEX])))
+    if ((readbyte == 0xFF) || (readbyte == 0) || (readbyte == myindex)  || (readbyte == mynotindex))
     {
       continue;
     }
-
     gotSomething = true;
 
     if (now > (lastread + READTIMEOUT))
@@ -272,7 +273,10 @@ bool checkConnect()
     // send index is +1..
     int poleindex = - 1;
     for (unsigned i = 0; i < COUNT_OF(WIRE_INDEXES); i++) {
-      if ((readbyte == WIRE_INDEXES[i]) || (readbyte == ~WIRE_INDEXES[i])) {
+    const uint8_t curindex = WIRE_INDEXES[i];
+    const uint8_t curnotindex = ~curindex;
+
+      if ((readbyte == curindex) || (readbyte == curnotindex)) {
         poleindex = i;
         break;
       }
