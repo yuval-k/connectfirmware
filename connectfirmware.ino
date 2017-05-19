@@ -6,7 +6,7 @@
 #include "LowLevel.h"
 #include "CapTouch.h"
 
-unsigned MY_INDEX = 0;
+unsigned MY_INDEX = 100;
 constexpr int NUM_POLES{20};
 
 
@@ -92,21 +92,22 @@ int getbit(int pin, int bit){if (digitalRead(pin) == LOW) return 1 << bit ; else
 
 void setup()
 {
+  if (MY_INDEX >= NUM_POLES) {
+    pinMode(3, INPUT_PULLUP);
+    pinMode(A0, INPUT_PULLUP);
+    pinMode(A1, INPUT_PULLUP);
+    pinMode(A2, INPUT_PULLUP);
+    pinMode(A3, INPUT_PULLUP);
+    delay(1);
+    MY_INDEX = getbit(3,0) | getbit(A0,1) | getbit(A1,2) | getbit(A2,3) | getbit(A3,4);
 
-  pinMode(3, INPUT_PULLUP);
-  pinMode(A0, INPUT_PULLUP);
-  pinMode(A1, INPUT_PULLUP);
-  pinMode(A2, INPUT_PULLUP);
-  pinMode(A3, INPUT_PULLUP);
-  delay(1);
-  MY_INDEX = getbit(3,0) | getbit(A0,1) | getbit(A1,2) | getbit(A2,3) | getbit(A3,4);
-
-  pinMode(3, INPUT);
-  pinMode(A0, INPUT);
-  pinMode(A1, INPUT);
-  pinMode(A2, INPUT);
-  pinMode(A3, INPUT);
-
+    pinMode(3, INPUT);
+    pinMode(A0, INPUT);
+    pinMode(A1, INPUT);
+    pinMode(A2, INPUT);
+    pinMode(A3, INPUT);
+  }
+  
 #if ENABLE_PWD
 SIGNAL_FREQ = signal_freq_for(MY_INDEX);
 #endif 
