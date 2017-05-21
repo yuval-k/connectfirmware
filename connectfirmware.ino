@@ -10,33 +10,11 @@ unsigned MY_INDEX = 100;
 constexpr int NUM_POLES{20};
 
 
-#ifdef USE_PWM
-
-#include "FreqMeasure.h"
-#include "TimerOne.h"
-
-constexpr unsigned long freqmeasure_pin{8};
-constexpr unsigned long signal_pin{9};
-
-constexpr unsigned long FREQ_START{300};
-constexpr unsigned long FREQ_END{1300};
-
-constexpr unsigned long FREQ_SKIP{(FREQ_END - FREQ_START) / (NUM_POLES - 1)};
-constexpr unsigned long FREQ_SENSE{FREQ_SKIP * 10 / 100}; // 10%
-
-unsigned long SIGNAL_FREQ;
-constexpr unsigned long signal_freq_for(int index) { return FREQ_START + FREQ_SKIP * index; }
-
-constexpr unsigned long BROADCAST_TIME{20};
-
-constexpr unsigned long WINDOW_LENGTH{5};
-
-#else
 
 #include "SoftwareSerialWithHalfDuplex.h"
 
-constexpr uint8_t SERIAL_RX_PIN{10};
-constexpr uint8_t SERIAL_TX_PIN{11};
+constexpr uint8_t SERIAL_RX_PIN{8};
+constexpr uint8_t SERIAL_TX_PIN{9};
 constexpr unsigned long SERIAL_RATE{4800};
 
 SoftwareSerialWithHalfDuplex mySerial(SERIAL_RX_PIN, SERIAL_TX_PIN, false, false);
@@ -46,15 +24,14 @@ const uint8_t WIRE_INDEXES[NUM_POLES] = {42 ,25 ,37 ,91 ,112,
                                          123, 29, 53,71 ,45,
                                          14 , 77,122,86 ,22 };
 
-#endif
 
 constexpr uint8_t TOUCH_LED_INDEX{13};
 constexpr uint8_t CONNECT_LED_INDEX{12};
 
-constexpr uint8_t CAP_TX{4};
-constexpr uint8_t CAP_RX{6};
+constexpr uint8_t CAP_TX{6};
+constexpr uint8_t CAP_RX{7};
 
-constexpr uint8_t pin_onewire{7};
+constexpr uint8_t pin_onewire{4};
 
 constexpr unsigned int CAP_SAMPLES{15};
 constexpr unsigned int CAP_THRESHOLD{50};
@@ -107,10 +84,7 @@ void setup()
     pinMode(A2, INPUT);
     pinMode(A3, INPUT);
   }
-  
-#if ENABLE_PWD
-SIGNAL_FREQ = signal_freq_for(MY_INDEX);
-#endif 
+
 pole = new  OneWirePole(MY_INDEX);
 
   pinMode(TOUCH_LED_INDEX, OUTPUT);
@@ -139,12 +113,8 @@ pole = new  OneWirePole(MY_INDEX);
 
   hub.attach(*pole);
 
-#ifdef USE_PWM
-  FreqMeasure.begin();
-#else
   mySerial.begin(SERIAL_RATE);
   delay(500);
-#endif
 }
 
 
@@ -165,83 +135,6 @@ unsigned long txdeadline = 0;
 unsigned long capdeadline = 0;
 unsigned long lastread = 0;
 #define READTIMEOUT 1000
-#ifdef USE_PWM
-
-bool checkConnect()
-{
-  static unsigned int lineindex = 0;
-  static int count = 0;
-  static unsigned long sum = 0;
-
-  if (!FreqMeasure.available())
-  {
-    return false;
-  }
-  unsigned long now = millis();
-
-  if (now > (lastread + READTIMEOUT))
-  {
-    count = 0;
-    sum = 0;
-  }
-
-  while (FreqMeasure.available())
-  {
-    unsigned long reading = FreqMeasure.read();
-    unsigned long freq = F_CPU/reading;
-
-    if (freq < (FREQ_START - FREQ_SKIP)) {
-      continue;
-    }
-    if (freq > (FREQ_END + FREQ_SKIP)) {
-      continue;
-    }
-//Serial.println(freq);
-
-    count++;
-    sum += reading;
-
-    if (count == WINDOW_LENGTH)
-    {
-
-      int poleindex = count_to_pole_index(sum / count);
-      if (poleindex >= 0)
-      {
-            Serial.print(lineindex++);
-             Serial.print(" detect ");
-             Serial.println(poleindex);
-             Serial.println(F_CPU / (sum / count));
-        poletimes[poleindex] = now + TOUCH_TIMEOUT;
-      }
-
-      count = 0;
-      sum = 0;
-    }
-  }
-
-  lastread = now;
-  return true;
-}
-
-int count_to_pole_index(unsigned long count)
-{
-  unsigned long freq = F_CPU / count;
-
-  for (int i = 0; i < NUM_POLES; ++i)
-  {
-    unsigned long curfreq = signal_freq_for(i);
-    unsigned long minfreq = curfreq - FREQ_SENSE;
-    unsigned long maxfreq = curfreq + FREQ_SENSE;
-
-    if ((minfreq < freq) && (freq <= maxfreq))
-    {
-      return i;
-    }
-  }
-  return -1;
-}
-
-#else
 
 bool checkConnect()
 {
@@ -321,7 +214,6 @@ bool checkConnect()
   }
   return gotSomething;
 }
-#endif
 
 void loop()
 {
@@ -392,26 +284,6 @@ mySerial.begin(SERIAL_RATE);
   }
 }
 
-#ifdef USE_PWM
-
-void send_myself()
-{
-  // start pwm on pin 8 9 or
-
-  unsigned long micro = 1000000ul / SIGNAL_FREQ;
-  Timer1.initialize(micro);
-  Timer1.pwm(signal_pin, 512);
-  // wait for time
-  unsigned long deadine = millis() + BROADCAST_TIME;
-  while (millis() < deadine)
-  {
-    hub.poll();
-  }
-
-  Timer1.disablePwm(signal_pin);
-}
-#else
-
 void send_myself()
 {
 
@@ -429,7 +301,6 @@ void send_myself()
   }
 }
 
-#endif
 
 void copyState()
 {
