@@ -47,16 +47,6 @@ unsigned int TxPeriod() {return (100 + ((5 * MY_INDEX) % 50));}
 
 constexpr unsigned int CAP_SENSE_PERIOD {100};
 
-enum DeviceState
-{
-  DS_WaitingReset,
-  DS_WaitingCommand,
-  DS_StateWritten,
-};
-volatile DeviceState state = DS_WaitingReset;
-
-// scratchpad, with the CRC byte at the end
-volatile byte scratchpad[9];
 
 // This is the ROM the arduino will respond to, make sure it doesn't conflict with another device
 
@@ -292,12 +282,8 @@ void send_myself()
 
   for (int i = 0; i < 20; i++)
   {
-//    unsigned long now  = millis();
     mySerial.write(&id, 1);
-//    while(millis() == now) hub.poll();
     mySerial.write(&notid, 1);
-//    now  = millis();
-//    while(millis() == now) hub.poll();
   }
 }
 
@@ -305,7 +291,7 @@ void send_myself()
 void copyState()
 {
   unsigned long now = millis();
-  uint8_t currentstate[8] = {'\0'};
+  uint8_t currentstate[3] = {'\0'};
 
   static bool touching = false;
   bool istouch = false;

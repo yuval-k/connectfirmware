@@ -1,4 +1,5 @@
 #include "OneWirePole.h"
+#include "utils.h"
 #include <OneWire.h>
 
 OneWirePole::OneWirePole(int index) : OneWireItem(0x33, index,0,0,0,0,0), scratchpad{0}
@@ -9,7 +10,7 @@ OneWirePole::OneWirePole(int index) : OneWireItem(0x33, index,0,0,0,0,0), scratc
 
 void OneWirePole::updateCRC()
 {
-    scratchpad[8] = crc8(scratchpad, 8);
+    scratchpad[COUNT_OF(scratchpad)-1] = crc8(scratchpad, COUNT_OF(scratchpad)-1);
 }
 
 void OneWirePole::duty(OneWireHub * const hub)

@@ -11,7 +11,7 @@ class OneWirePole : public OneWireItem
 {
 private:
 
-    uint8_t scratchpad[9];
+    uint8_t scratchpad[4];
 
    void updateCRC();
 
