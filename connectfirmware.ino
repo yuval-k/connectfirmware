@@ -374,8 +374,8 @@ void copyState()
   }
   else
   {
-    uint8_t datatoSend[4] = {currentstate[0], currentstate[1], currentstate[2],
-                             OneWire::crc8(currentstate, COUNT_OF(currentstate))};
+    uint8_t datatoSend[5] = {MY_INDEX, currentstate[0], currentstate[1], currentstate[2],0};
+    datatoSend[COUNT_OF(datatoSend)-1] = OneWire::crc8(datatoSend, COUNT_OF(datatoSend)-1);
     CommSerial->write(datatoSend, COUNT_OF(datatoSend));
   }
 }
