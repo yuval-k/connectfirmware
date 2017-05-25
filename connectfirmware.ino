@@ -13,8 +13,8 @@ constexpr int NUM_POLES{20};
 
 #include "SoftwareSerialWithHalfDuplex.h"
 
-constexpr uint8_t SERIAL_RX_PIN{8};
-constexpr uint8_t SERIAL_TX_PIN{9};
+constexpr uint8_t SERIAL_RX_PIN{10};
+constexpr uint8_t SERIAL_TX_PIN{11};
 constexpr unsigned long SERIAL_RATE{4800};
 
 SoftwareSerialWithHalfDuplex mySerial(SERIAL_RX_PIN, SERIAL_TX_PIN, false, false);
@@ -28,10 +28,10 @@ const uint8_t WIRE_INDEXES[NUM_POLES] = {42 ,25 ,37 ,91 ,112,
 constexpr uint8_t TOUCH_LED_INDEX{13};
 constexpr uint8_t CONNECT_LED_INDEX{12};
 
-constexpr uint8_t CAP_TX{6};
-constexpr uint8_t CAP_RX{7};
+constexpr uint8_t CAP_TX{4};
+constexpr uint8_t CAP_RX{6};
 
-constexpr uint8_t pin_onewire{4};
+constexpr uint8_t pin_onewire{7};
 
 constexpr unsigned int CAP_SAMPLES{15};
 constexpr unsigned int CAP_THRESHOLD{50};
@@ -229,6 +229,7 @@ void loop()
   {
     stateupdate_deadline = now + STATE_UPDATE;
     copyState();
+    hub.poll();
   }
 
   //     Serial.println(" got nothing");
@@ -241,7 +242,9 @@ void loop()
   if (now > capdeadline)
   {
 
-    capdeadline = now + CAP_SENSE_PERIOD;
+  hub.poll();
+  
+  capdeadline = millis() + CAP_SENSE_PERIOD;
 
 //    FreqMeasure.end();
 mySerial.end();
@@ -261,8 +264,9 @@ mySerial.begin(SERIAL_RATE);
 
   if (now > txdeadline)
   {
+  hub.poll();
 
-    txdeadline = now + TxPeriod();
+    txdeadline = millis() + TxPeriod();
 //    FreqMeasure.end();
 
 //    pinMode(freqmeasure_pin, INPUT);
