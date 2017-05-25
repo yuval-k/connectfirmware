@@ -1,5 +1,6 @@
 #include "OneWireHub.h"
 #include "OneWirePole.h"
+#include "OneWire.h"
 
 #include "utils.h"
 
@@ -15,6 +16,10 @@ constexpr int NUM_POLES{20};
 
 constexpr uint8_t SERIAL_RX_PIN{10};
 constexpr uint8_t SERIAL_TX_PIN{11};
+
+constexpr uint8_t OUT_SERIAL_RX_PIN{8};
+constexpr uint8_t OUT_SERIAL_TX_PIN{9};
+
 constexpr unsigned long SERIAL_RATE{4800};
 
 SoftwareSerialWithHalfDuplex mySerial(SERIAL_RX_PIN, SERIAL_TX_PIN, false, false);
@@ -57,6 +62,10 @@ OneWirePole* pole = nullptr;
 
 int getbit(int pin, int bit){if (digitalRead(pin) == LOW) return 1 << bit ; else return 0;}
 
+bool UseOneWire = false;
+
+SoftwareSerialWithHalfDuplex *CommSerial = nullptr;
+
 void setup()
 {
   if (MY_INDEX >= NUM_POLES) {
@@ -75,7 +84,11 @@ void setup()
     pinMode(A3, INPUT);
   }
 
-pole = new  OneWirePole(MY_INDEX);
+if (UseOneWire) {
+  pole = new  OneWirePole(MY_INDEX); 
+} else {
+  CommSerial = new SoftwareSerialWithHalfDuplex(OUT_SERIAL_RX_PIN, OUT_SERIAL_TX_PIN, false, false);
+}
 
   pinMode(TOUCH_LED_INDEX, OUTPUT);
   pinMode(CONNECT_LED_INDEX, OUTPUT);
@@ -101,8 +114,9 @@ pole = new  OneWirePole(MY_INDEX);
   Serial.println("setting send pin back to input");
   pinMode(CAP_TX, INPUT);
 
+if (UseOneWire) {
   hub.attach(*pole);
-
+}
   mySerial.begin(SERIAL_RATE);
   delay(500);
 }
@@ -212,8 +226,9 @@ void loop()
   static unsigned int lineindex = 0;
   static unsigned long silencedeadline = 0;
   static unsigned long stateupdate_deadline = 0;
-
+if (UseOneWire) {
   hub.poll();
+}
 
   bool gotSomething = checkConnect();
 
@@ -229,7 +244,9 @@ void loop()
   {
     stateupdate_deadline = now + STATE_UPDATE;
     copyState();
+if (UseOneWire) {
     hub.poll();
+}
   }
 
   //     Serial.println(" got nothing");
@@ -241,8 +258,9 @@ void loop()
 
   if (now > capdeadline)
   {
-
+if (UseOneWire) {
   hub.poll();
+}
   
   capdeadline = millis() + CAP_SENSE_PERIOD;
 
@@ -264,8 +282,9 @@ mySerial.begin(SERIAL_RATE);
 
   if (now > txdeadline)
   {
+if (UseOneWire) {
   hub.poll();
-
+}
     txdeadline = millis() + TxPeriod();
 //    FreqMeasure.end();
 
@@ -331,5 +350,12 @@ void copyState()
   digitalWrite(TOUCH_LED_INDEX, istouch ? HIGH : LOW);
   digitalWrite(CONNECT_LED_INDEX, isconnect ? HIGH : LOW);
 
+if (UseOneWire) {
+
   pole->copy_scrachpad(currentstate, COUNT_OF(currentstate));
+} else {
+    uint8_t datatoSend[4] = {currentstate[0],currentstate[1],currentstate[2], OneWire::crc8(currentstate, COUNT_OF(currentstate))};
+  CommSerial->write(datatoSend, COUNT_OF(datatoSend));
+}
+
 }
