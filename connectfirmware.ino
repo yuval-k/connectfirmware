@@ -40,7 +40,7 @@ constexpr unsigned int CAP_SAMPLES{15};
 constexpr unsigned int CAP_THRESHOLD{50};
 
 constexpr unsigned int SILENCE_AFTER_READ{20};
-constexpr unsigned int STATE_UPDATE{50};
+constexpr unsigned int STATE_UPDATE{200};
 
 CapTouch capTouch = CapTouch(CAP_TX, CAP_RX);
 
@@ -94,7 +94,7 @@ void setup()
   }
   else
   {
-    CommSerial = new SoftwareSerialWithHalfDuplex(OUT_SERIAL_RX_PIN, OUT_SERIAL_TX_PIN, false, false);
+    CommSerial = new SoftwareSerialWithHalfDuplex(OUT_SERIAL_RX_PIN, OUT_SERIAL_TX_PIN, false, true);
   }
 
   pinMode(TOUCH_LED_INDEX, OUTPUT);
@@ -375,7 +375,17 @@ void copyState()
   else
   {
     uint8_t datatoSend[5] = {MY_INDEX, currentstate[0], currentstate[1], currentstate[2],0};
-    datatoSend[COUNT_OF(datatoSend)-1] = OneWire::crc8(datatoSend, COUNT_OF(datatoSend)-1);
+    datatoSend[COUNT_OF(datatoSend)-1] = lame_crc8(datatoSend, COUNT_OF(datatoSend)-1);
     CommSerial->write(datatoSend, COUNT_OF(datatoSend));
   }
+}
+
+uint8_t lame_crc8(const uint8_t* v, int len) {
+  uint8_t sum = 0;
+
+  for(int i =0;i<len;i++) {
+    sum += v[i];
+  }
+
+  return sum;
 }
